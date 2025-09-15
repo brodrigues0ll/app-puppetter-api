@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "mongoose": "^8.18.1",
     "next": "15.5.3",
     "puppeteer": "^24.20.0",
     "react": "19.1.0",
