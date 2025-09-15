@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 
-let savedCookies = null; // Para reaproveitar sessão em requisições futuras
+// Cookie/sessão em memória para reaproveitar login
+let savedCookies = null;
 
-export async function GET() {
+// Token secreto que sua aplicação envia no header
+const SECRET_KEY = process.env.RELATORIO_API_KEY;
+
+export async function GET(req) {
   try {
+    // 1️⃣ Verifica se o header correto foi enviado
+    // const authHeader = req.headers.get("x-api-key");
+    // if (authHeader !== SECRET_KEY) {
+    //   return NextResponse.json(
+    //     { success: false, error: "Acesso negado" },
+    //     { status: 403 }
+    //   );
+    // }
+
     const email = process.env.ORGANIZZE_EMAIL;
     const password = process.env.ORGANIZZE_PASSWORD;
 
@@ -15,16 +28,16 @@ export async function GET() {
       );
     }
 
-    // 1️⃣ Inicializa o navegador (headless para velocidade)
+    // 2️⃣ Inicializa navegador headless para velocidade
     const browser = await puppeteer.launch({
-      headless: true, // mais rápido
+      headless: true,
       defaultViewport: null,
       args: ["--start-maximized"],
     });
 
     const page = await browser.newPage();
 
-    // 2️⃣ Bloqueia recursos pesados (imagens, CSS, fonts)
+    // 3️⃣ Bloqueia recursos pesados
     await page.setRequestInterception(true);
     page.on("request", (req) => {
       const type = req.resourceType();
@@ -35,16 +48,15 @@ export async function GET() {
       }
     });
 
-    // 3️⃣ Reaproveita sessão se houver cookies salvos
+    // 4️⃣ Reaproveita sessão se houver cookies
     if (savedCookies) {
       await page.setCookie(...savedCookies);
-      console.log("♻️ Sessão reaproveitada com cookies salvos");
     }
 
     const loginUrl = "https://auth.organizze.com.br/login";
     await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
 
-    // 4️⃣ Se não tiver sessão válida, faz login
+    // 5️⃣ Faz login apenas se não estiver logado
     const loggedIn = await page.evaluate(
       () => !!document.querySelector("nav, .navbar, .app-header")
     );
@@ -61,18 +73,15 @@ export async function GET() {
 
       // Salva cookies para próximas requisições
       savedCookies = await page.cookies();
-      console.log("✅ Login realizado e cookies salvos");
-    } else {
-      console.log("✅ Já estava logado");
     }
 
-    // 5️⃣ Vai para a página de relatórios
+    // 6️⃣ Acessa página de relatórios
     const reportUrl =
       "https://app.organizze.com.br/4599414/relatorios/entradas-e-saidas";
     await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("table tbody tr", { timeout: 10000 });
 
-    // 6️⃣ Extrai dados da tabela apenas do mês (datas válidas)
+    // 7️⃣ Extrai dados apenas do mês
     const tableData = await page.evaluate(() => {
       const rows = Array.from(document.querySelectorAll("table tbody tr"));
       const regexDate = /^\d{2}\/\d{2}\/\d{4}$/; // DD/MM/YYYY
@@ -90,7 +99,6 @@ export async function GET() {
         .filter((item) => regexDate.test(item.date));
     });
 
-    // 7️⃣ Retorna JSON
     return NextResponse.json({
       success: true,
       data: tableData,
