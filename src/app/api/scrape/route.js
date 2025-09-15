@@ -28,20 +28,30 @@ export async function GET(req) {
       );
     }
 
-    // 2️⃣ Inicializa navegador headless para velocidade
+    // 2️⃣ Inicializa navegador headless ultra-rápido
     const browser = await puppeteer.launch({
       headless: true,
       defaultViewport: null,
-      args: ["--start-maximized"],
+      args: [
+        "--start-maximized",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-extensions",
+        "--disable-gpu",
+        "--disable-infobars",
+        "--single-process",
+        "--no-zygote",
+      ],
     });
 
     const page = await browser.newPage();
 
-    // 3️⃣ Bloqueia recursos pesados
+    // 3️⃣ Bloqueia recursos pesados para acelerar
     await page.setRequestInterception(true);
     page.on("request", (req) => {
       const type = req.resourceType();
-      if (["image", "stylesheet", "font"].includes(type)) {
+      if (["image", "stylesheet", "font", "media"].includes(type)) {
         req.abort();
       } else {
         req.continue();
@@ -53,35 +63,41 @@ export async function GET(req) {
       await page.setCookie(...savedCookies);
     }
 
-    const loginUrl = "https://auth.organizze.com.br/login";
-    await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+    const reportUrl =
+      "https://app.organizze.com.br/4599414/relatorios/entradas-e-saidas";
 
-    // 5️⃣ Faz login apenas se não estiver logado
+    // 5️⃣ Vai direto para relatório (mais rápido que login)
+    await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
+
+    // 6️⃣ Verifica login
     const loggedIn = await page.evaluate(
       () => !!document.querySelector("nav, .navbar, .app-header")
     );
+
     if (!loggedIn) {
+      // Faz login apenas se cookies não funcionarem
+      const loginUrl = "https://auth.organizze.com.br/login";
+      await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+
       await page.waitForSelector("#email", { visible: true });
-      await page.type("#email", email, { delay: 20 });
+      await page.type("#email", email, { delay: 5 });
       await page.waitForSelector("#password", { visible: true });
-      await page.type("#password", password, { delay: 20 });
+      await page.type("#password", password, { delay: 5 });
 
       await Promise.all([
         page.click('button[type="submit"]'),
-        page.waitForSelector("nav, .navbar, .app-header", { timeout: 15000 }),
+        page.waitForSelector("nav, .navbar, .app-header", { timeout: 10000 }),
       ]);
 
       // Salva cookies para próximas requisições
       savedCookies = await page.cookies();
+
+      // Vai direto para relatório
+      await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
     }
 
-    // 6️⃣ Acessa página de relatórios
-    const reportUrl =
-      "https://app.organizze.com.br/4599414/relatorios/entradas-e-saidas";
-    await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("table tbody tr", { timeout: 10000 });
-
     // 7️⃣ Extrai dados apenas do mês
+    await page.waitForSelector("table tbody tr", { timeout: 5000 });
     const tableData = await page.evaluate(() => {
       const rows = Array.from(document.querySelectorAll("table tbody tr"));
       const regexDate = /^\d{2}\/\d{2}\/\d{4}$/; // DD/MM/YYYY
