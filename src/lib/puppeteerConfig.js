@@ -1,21 +1,25 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium-min";
 
 export async function launchBrowser() {
-  return puppeteer.launch({
-    headless: true,
-    defaultViewport: null,
-    args: [
-      "--start-maximized",
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-extensions",
-      "--disable-gpu",
-      "--disable-infobars",
-      "--single-process",
-      "--no-zygote",
-    ],
-  });
+  const isLocal = process.env.VERCEL === undefined;
+
+  return isLocal
+    ? await require("puppeteer").launch({
+        // desenvolvimento local
+        headless: true,
+        defaultViewport: null,
+        args: ["--start-maximized"],
+      })
+    : await puppeteer.launch({
+        // Vercel
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(
+          "https://github.com/Sparticuz/chromium/releases/download/v119.0.2/chromium-v119.0.2-pack.tar"
+        ),
+        headless: chromium.headless,
+      });
 }
 
 export async function createPage(browser, cookies = null) {
@@ -25,15 +29,10 @@ export async function createPage(browser, cookies = null) {
   await page.setRequestInterception(true);
   page.on("request", (req) => {
     const type = req.resourceType();
-    if (["image", "stylesheet", "font", "media"].includes(type)) {
-      req.abort();
-    } else {
-      req.continue();
-    }
+    if (["image", "stylesheet", "font", "media"].includes(type)) req.abort();
+    else req.continue();
   });
 
-  // Cookies
   if (cookies) await page.setCookie(...cookies);
-
   return page;
 }

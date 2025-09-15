@@ -10,12 +10,14 @@
   "dependencies": {
     "mongoose": "^8.18.1",
     "next": "15.5.3",
-    "puppeteer": "^24.20.0",
+    "puppeteer-core": "^21.5.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
   "devDependencies": {
+    "@sparticuz/chromium-min": "^119.0.2",
     "@tailwindcss/postcss": "^4",
+    "puppeteer": "^21.5.0",
     "tailwindcss": "^4"
   }
 }
