@@ -9,31 +9,36 @@ export function setSavedCookies(cookies) {
 }
 
 export async function loginIfNeeded(page, email, password, reportUrl) {
-  // Verifica se está logado
+  // Checa se já está logado
   const loggedIn = await page.evaluate(
     () => !!document.querySelector("nav, .navbar, .app-header")
   );
 
   if (!loggedIn) {
     const loginUrl = "https://auth.organizze.com.br/login";
-    await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+    await page.goto(loginUrl, { waitUntil: "networkidle2", timeout: 60000 });
 
-    await page.waitForSelector("#email", { visible: true });
-    await page.type("#email", email, { delay: 5 });
+    await page.waitForSelector("#email", { visible: true, timeout: 30000 });
+    await page.type("#email", email, { delay: 100 }); // digitação mais lenta
 
-    await page.waitForSelector("#password", { visible: true });
-    await page.type("#password", password, { delay: 5 });
+    await page.waitForSelector("#password", { visible: true, timeout: 30000 });
+    await page.type("#password", password, { delay: 100 }); // digitação mais lenta
 
-    await Promise.all([
-      page.click('button[type="submit"]'),
-      page.waitForSelector("nav, .navbar, .app-header", { timeout: 10000 }),
-    ]);
+    await page.click('button[type="submit"]');
+
+    // Espera a página carregar completamente após login
+    await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 });
+
+    // Garante que o seletor de navegação esteja visível
+    await page.waitForSelector("nav, .navbar, .app-header", { timeout: 60000 });
 
     // Salva cookies
-    const cookies = await page.cookies();
-    savedCookies = cookies;
+    savedCookies = await page.cookies();
   }
 
-  // Vai direto para relatório
-  await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
+  // Vai para o relatório
+  await page.goto(reportUrl, { waitUntil: "networkidle2", timeout: 60000 });
+
+  // Espera a tabela carregar
+  await page.waitForSelector("table tbody tr", { timeout: 60000 });
 }
