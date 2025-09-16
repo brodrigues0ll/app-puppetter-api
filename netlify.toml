@@ -6,3 +6,6 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--force"
   NETLIFY_USE_YARN = "false"
+
+[functions]
+  node_bundler = "esbuild"
