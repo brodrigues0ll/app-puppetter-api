@@ -9,5 +9,5 @@
 external_node_modules = ["@sparticuz/chromium"]
 
 [functions."test-scheduled-function"]
-schedule = "14 34 * * *"
+schedule = "25 14 * * *"
   
