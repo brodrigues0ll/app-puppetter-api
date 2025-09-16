@@ -8,15 +8,15 @@
     "start": "next start"
   },
   "dependencies": {
+    "@sparticuz/chromium-min": "^138.0.2",
+    "chromium": "3.0.3",
     "mongoose": "^8.18.1",
     "next": "15.5.3",
     "puppeteer-core": "24.10.2",
     "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "chromium": "3.0.3"
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
-    "@sparticuz/chromium-min": "^119.0.2",
     "@tailwindcss/postcss": "^4",
     "puppeteer": "24.10.2",
     "tailwindcss": "^4"

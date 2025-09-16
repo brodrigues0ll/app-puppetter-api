@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer-core";
-import chromium from "chromium";
+import chromium from "@sparticuz/chromium-min";
 
 export async function launchBrowser() {
   const isLocal = process.env.NETLIFY === undefined;
