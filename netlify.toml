@@ -8,6 +8,6 @@
 [functions]
 external_node_modules = ["@sparticuz/chromium"]
 
-[functions."test-scheduled-function"]
+[functions."update-database"]
 schedule = "00 01 * * *"
   
