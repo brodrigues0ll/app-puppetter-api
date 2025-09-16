@@ -6,6 +6,7 @@ const reportSchema = new mongoose.Schema({
   expenses: { type: String },
   result: { type: String },
   balance: { type: String },
+  updatedAt: { type: Date, default: Date.now },
 });
 
 const Report = mongoose.models.Report || mongoose.model("Report", reportSchema);
