@@ -11,6 +11,9 @@ export async function saveReports(data) {
       // Upsert: cria se não existir, atualiza se já existir
       const report = await Report.findOneAndUpdate(
         { date: item.date },
+        // Atualiza o campo updatedAt sempre que o relatório for atualizado
+        { $set: { ...item, updatedAt: Date.now() } },
+
         { $set: item },
         { upsert: true, new: true }
       );
