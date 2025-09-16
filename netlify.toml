@@ -6,6 +6,10 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--force"
   NETLIFY_USE_YARN = "false"
+  PUPPETEER_CACHE_DIR = "/opt/buildhome/.cache/puppeteer"  
+  
 
 [functions]
   node_bundler = "esbuild"
+
+  
