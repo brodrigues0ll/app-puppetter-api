@@ -1,7 +1,17 @@
 export default async (req) => {
   const { next_run } = await req.json();
 
-  await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/scrape}`);
+  const URL = process.env.NEXT_PUBLIC_BASE_URL;
+  const fetch = async () => {
+    const res = await fetch(`${URL}/api/reports/update`);
+    const data = await res.json();
+    console.log(data);
+  };
 
-  console.log("Received event! Next invocation at:", next_run);
+  await fetch();
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ next_run }),
+  };
 };
