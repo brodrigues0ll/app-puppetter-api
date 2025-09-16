@@ -1,24 +1,24 @@
 import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium-min";
+import chromium from "chromium";
 
 export async function launchBrowser() {
-  const isLocal = process.env.VERCEL === undefined;
+  const isLocal = process.env.NETLIFY === undefined;
 
   return isLocal
-    ? await require("puppeteer").launch({
-        // desenvolvimento local
-        headless: true,
-        defaultViewport: null,
-        args: ["--start-maximized"],
-      })
+    ? await import("puppeteer").then(({ default: p }) =>
+        p.launch({
+          // Desenvolvimento local com Chrome do Puppeteer normal
+          headless: true,
+          defaultViewport: null,
+          args: ["--start-maximized"],
+        })
+      )
     : await puppeteer.launch({
-        // Vercel
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(
-          "https://github.com/Sparticuz/chromium/releases/download/v119.0.2/chromium-v119.0.2-pack.tar"
-        ),
-        headless: chromium.headless,
+        // Ambiente Netlify
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        defaultViewport: null,
+        executablePath: chromium.path, // binário do pacote chromium
+        headless: true,
       });
 }
 
