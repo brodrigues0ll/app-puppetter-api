@@ -1,27 +1,25 @@
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium-min";
+import puppeteer from "puppeteer";
+import puppeteerCore from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 export async function launchBrowser() {
-  const isLocal = process.env.NETLIFY === undefined;
+  const isLocal = process.env.NODE_ENV !== "production";
 
   if (isLocal) {
-    // Desenvolvimento local com Chrome completo do Puppeteer
-    const { default: p } = await import("puppeteer");
-    return p.launch({
+    // Ambiente local -> Puppeteer com Chrome embutido
+    return puppeteer.launch({
       headless: true,
-      defaultViewport: null,
-      args: ["--start-maximized"],
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
   }
 
-  // Ambiente Netlify (usa o binário do chromium-min)
-  const executablePath = await chromium.executablePath();
-
-  return puppeteer.launch({
+  // Produção (Netlify, Vercel, AWS Lambda) -> Chromium compactado
+  return puppeteerCore.launch({
     args: chromium.args,
     defaultViewport: chromium.defaultViewport,
-    executablePath,
-    headless: chromium.headless, // respeita a config recomendada do pacote
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
+    ignoreHTTPSErrors: true,
   });
 }
 
