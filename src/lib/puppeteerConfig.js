@@ -6,22 +6,32 @@ export async function launchBrowser() {
   const isLocal = process.env.NODE_ENV !== "production";
 
   if (isLocal) {
-    // Ambiente local -> Puppeteer com Chrome embutido
     return puppeteer.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+        "--disable-extensions",
+        "--disable-dev-shm-usage",
+        "--disable-infobars",
+        "--single-process",
+        "--no-zygote",
+      ],
+      defaultViewport: null,
+      timeout: 30000, // 30s para abrir o browser
     });
   }
 
-  // Produção (Netlify, Vercel, AWS Lambda) -> Chromium compactado
   return puppeteerCore.launch({
-    args: chromium.args,
+    args: [...chromium.args, "--disable-gpu", "--disable-dev-shm-usage"],
     defaultViewport: chromium.defaultViewport,
     executablePath: await chromium.executablePath(
-      `https://github.com/Sparticuz/chromium/releases/download/v138.0.2/chromium-v138.0.2-pack.x64.tar`
+      "https://github.com/Sparticuz/chromium/releases/download/v138.0.2/chromium-v138.0.2-pack.x64.tar"
     ),
     headless: chromium.headless,
     ignoreHTTPSErrors: true,
+    timeout: 30000, // 30s para abrir o browser
   });
 }
 
@@ -39,6 +49,11 @@ export async function createPage(browser, cookies = null) {
     }
   });
 
+  // Timeout padrão menor para ações e navegação
+  await page.setDefaultNavigationTimeout(15000); // 15s
+  await page.setDefaultTimeout(10000); // 10s para waitFor
+
   if (cookies) await page.setCookie(...cookies);
+
   return page;
 }
