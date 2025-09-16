@@ -1,5 +1,5 @@
 [build]
-  command = "npm install --force && npm run build"
+  command = "npm install --force && npx puppeteer browsers install chrome &&  npm run build"
   publish = ".next"
 
 [build.environment]
