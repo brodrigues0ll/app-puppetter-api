@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@sparticuz/chromium": "^123.0.0",
+    "@netlify/functions": "^4.2.5",
     "mongoose": "^8.18.1",
     "next": "15.5.3",
     "puppeteer-core": "22.11.0",
@@ -17,7 +18,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "puppeteer": "22.11.0",
+    "puppeteer": "24.10.2",
     "tailwindcss": "^4"
   }
 }
