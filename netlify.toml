@@ -3,6 +3,7 @@
   PLAYWRIGHT_BROWSERS_PATH = "0" # Garante que os navegadores sejam baixados no build
   NPM_FLAGS = "--force"
   NETLIFY_USE_YARN = "false"
+  REPORT_URL= "https://app.organizze.com.br/4599414/relatorios/entradas-e-saidas"
 
 [functions]
   external_node_modules = ["playwright"]
