@@ -9,4 +9,4 @@
   external_node_modules = ["playwright"]
 
 [functions."update-database"]
-  schedule = "5 36 * * *"
+  schedule = "38 18 * * *"
