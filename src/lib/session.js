@@ -1,44 +1,45 @@
-let savedCookies = null;
-
-export function getSavedCookies() {
-  return savedCookies;
-}
-
-export function setSavedCookies(cookies) {
-  savedCookies = cookies;
-}
-
-export async function loginIfNeeded(page, email, password, reportUrl) {
-  // Checa se já está logado
-  const loggedIn = await page.evaluate(
-    () => !!document.querySelector("nav, .navbar, .app-header")
-  );
-
-  if (!loggedIn) {
+export async function login(page, email, password, reportUrl) {
+  try {
+    console.log("🔑 Iniciando login...");
     const loginUrl = "https://auth.organizze.com.br/login";
-    await page.goto(loginUrl, { waitUntil: "networkidle2", timeout: 60000 });
+    await page.goto(loginUrl);
 
-    await page.waitForSelector("#email", { visible: true, timeout: 30000 });
-    await page.type("#email", email, { delay: 100 }); // digitação mais lenta
+    console.log("✏️ Preenchendo formulário...");
+    await page.fill("#email", email);
+    await page.fill("#password", password);
 
-    await page.waitForSelector("#password", { visible: true, timeout: 30000 });
-    await page.type("#password", password, { delay: 100 }); // digitação mais lenta
-
+    console.log("📤 Enviando formulário...");
     await page.click('button[type="submit"]');
 
-    // Espera a página carregar completamente após login
-    await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 });
+    console.log("⏳ Aguardando navegação pós-login...");
+    await page.waitForNavigation({ waitUntil: "networkidle" });
 
-    // Garante que o seletor de navegação esteja visível
-    await page.waitForSelector("nav, .navbar, .app-header", { timeout: 60000 });
+    console.log("🌐 Acessando relatório...");
+    await page.goto(reportUrl);
 
-    // Salva cookies
-    savedCookies = await page.cookies();
+    console.log("🔘 Marcando checkbox 'predicted'...");
+    const checkbox = await page.$("#predicted");
+    if (checkbox) {
+      const isChecked = await checkbox.isChecked();
+      if (!isChecked) {
+        await checkbox.check();
+        console.log("✅ Checkbox 'predicted' marcado.");
+      } else {
+        console.log("✅ Checkbox 'predicted' já estava marcado.");
+      }
+    } else {
+      console.warn("⚠️ Checkbox 'predicted' não encontrado.");
+    }
+
+    console.log("📊 Verificando tabela...");
+    await page.waitForSelector("table tbody tr", {
+      state: "attached",
+      timeout: 30000,
+    });
+
+    console.log("✅ Login e acesso ao relatório concluídos.");
+  } catch (error) {
+    console.error("❌ Erro no login:", error);
+    throw new Error("Falha ao realizar login ou acessar o relatório.");
   }
-
-  // Vai para o relatório
-  await page.goto(reportUrl, { waitUntil: "networkidle2", timeout: 60000 });
-
-  // Espera a tabela carregar
-  await page.waitForSelector("table tbody tr", { timeout: 60000 });
 }

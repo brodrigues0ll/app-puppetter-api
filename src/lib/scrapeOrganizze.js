@@ -1,21 +1,22 @@
+// src/lib/scrapeOrganizze.js
+
 export async function scrapeReport(page) {
-  await page.waitForSelector("table tbody tr", { timeout: 5000 });
+  console.log("📊 Extraindo dados da tabela...");
 
-  return page.evaluate(() => {
+  const data = await page.evaluate(() => {
     const rows = Array.from(document.querySelectorAll("table tbody tr"));
-    const regexDate = /^\d{2}\/\d{2}\/\d{4}$/;
 
-    return rows
-      .map((row) => {
-        const cells = row.querySelectorAll("td");
-        return {
-          date: cells[0]?.innerText.trim() || "",
-          earnings: cells[1]?.innerText.trim() || "",
-          expenses: cells[2]?.innerText.trim() || "",
-          result: cells[3]?.innerText.trim() || "",
-          balance: cells[4]?.innerText.trim() || "",
-        };
-      })
-      .filter((item) => regexDate.test(item.date));
+    return rows.map((row) => {
+      const date = row.querySelector("td.title")?.innerText.trim() || "";
+      const earnings = row.querySelector("td.earnings")?.innerText.trim() || "";
+      const expenses = row.querySelector("td.expenses")?.innerText.trim() || "";
+      const result = row.querySelector("td.result")?.innerText.trim() || "";
+      const balance = row.querySelector("td.balance")?.innerText.trim() || "";
+
+      return { date, earnings, expenses, result, balance };
+    });
   });
+
+  console.log(`✅ Extração concluída: ${data.length} registros.`);
+  return data;
 }

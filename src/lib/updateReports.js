@@ -1,33 +1,45 @@
-import { launchBrowser, createPage } from "@/lib/puppeteerConfig";
-import { getSavedCookies, loginIfNeeded } from "@/lib/session";
+// src/lib/updateReports.js
+
+import { launchBrowser, createPage } from "@/lib/playwrightConfig";
+import { login } from "@/lib/session";
 import { scrapeReport } from "@/lib/scrapeOrganizze";
 import { saveReports } from "@/lib/saveReport";
 
 const email = process.env.ORGANIZZE_EMAIL;
 const password = process.env.ORGANIZZE_PASSWORD;
-const reportUrl =
-  "https://app.organizze.com.br/4599414/relatorios/entradas-e-saidas";
+const reportUrl = process.env.REPORT_URL;
 
 export async function updateReports() {
-  if (!email || !password) {
-    throw new Error("Credenciais não configuradas no .env");
+  if (!email || !password || !reportUrl) {
+    throw new Error("Credenciais ou URL do relatório não configuradas no .env");
   }
 
   let browser;
   try {
+    console.log("🚀 Atualizando relatórios...");
     browser = await launchBrowser();
-    const page = await createPage(browser, getSavedCookies());
 
-    await loginIfNeeded(page, email, password, reportUrl);
+    const page = await createPage(browser);
+    console.log("🌐 Página criada.");
+
+    // Login e acesso ao relatório
+    await login(page, email, password, reportUrl);
+
+    // Extração dos dados
     const data = await scrapeReport(page);
 
+    // Salvando no banco
     const savedData = await saveReports(data);
-    console.log("✅ Relatórios atualizados:", savedData.length);
+    console.log(`✅ ${savedData.length} registros salvos.`);
+
     return savedData;
   } catch (err) {
     console.error("❌ Erro ao atualizar relatórios:", err);
     throw err;
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      await browser.close();
+      console.log("🛑 Navegador fechado.");
+    }
   }
 }
