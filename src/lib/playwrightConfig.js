@@ -1,25 +1,32 @@
 // src/lib/playwrightConfig.js
-
 "use server";
 
-import { chromium } from "playwright";
+import { chromium as playwrightChromium } from "playwright"; // para local
+import chromium from "@sparticuz/chromium"; // para produção
 
 export async function launchBrowser() {
-  const isLocal = process.env.NODE_ENV !== "production";
+  const isLocal = false;
 
   console.log("🚀 Iniciando o navegador...");
-  return chromium.launch({
-    headless: false, // Modo headful para depuração
-    slowMo: 300, // Adiciona atraso para facilitar a visualização
-    args: isLocal
-      ? []
-      : [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-gpu",
-          "--disable-dev-shm-usage",
-        ],
-  });
+
+  if (isLocal) {
+    // Ambiente local -> Playwright completo
+    return playwrightChromium.launch({
+      headless: false, // depuração local
+      slowMo: 300,
+    });
+  } else {
+    // Ambiente produção -> Playwright-core + Sparticuz Chromium
+    const { chromium: playwrightCore } = await import("playwright-core");
+
+    return playwrightCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+      ignoreHTTPSErrors: true,
+    });
+  }
 }
 
 export async function createPage(browser, cookies = null) {
@@ -27,7 +34,7 @@ export async function createPage(browser, cookies = null) {
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  // Bloqueia recursos pesados para acelerar
+  // Bloqueia recursos pesados
   console.log("🔍 Configurando bloqueio de recursos...");
   await page.route("**/*", (route) => {
     const type = route.request().resourceType();
