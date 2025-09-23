@@ -8,7 +8,7 @@ const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 export async function launchBrowser() {
-  const isLocal = false;
+  const isLocal = process.env.NODE_ENV !== "production";
 
   console.log("🚀 Iniciando o navegador...");
 
@@ -16,7 +16,7 @@ export async function launchBrowser() {
     // Ambiente local -> Playwright completo
     return playwrightChromium.launch({
       headless: false, // depuração local
-      slowMo: 300,
+      // slowMo: 300,
     });
   } else {
     // Ambiente produção -> Playwright-core + Sparticuz Chromium

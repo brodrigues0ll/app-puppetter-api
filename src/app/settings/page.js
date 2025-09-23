@@ -5,13 +5,22 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { setSetting, getSetting } from "@/lib/db";
-import { Settings, DollarSign, Save, ArrowLeft, Target } from "lucide-react";
+import {
+  Settings,
+  DollarSign,
+  Save,
+  ArrowLeft,
+  Target,
+  Download,
+} from "lucide-react";
 import Link from "next/link";
 
 export default function SettingsPage() {
   const [limit, setLimit] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isPwaInstallable, setIsPwaInstallable] = useState(false);
 
   useEffect(() => {
     async function loadLimit() {
@@ -19,6 +28,22 @@ export default function SettingsPage() {
       if (saved) setLimit(saved);
     }
     loadLimit();
+
+    // Detecta o evento beforeinstallprompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsPwaInstallable(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt
+      );
+    };
   }, []);
 
   async function handleSave() {
@@ -27,6 +52,20 @@ export default function SettingsPage() {
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
     setIsLoading(false);
+  }
+
+  async function handleInstallPwa() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      if (choiceResult.outcome === "accepted") {
+        console.log("✅ PWA instalado com sucesso.");
+      } else {
+        console.log("❌ Usuário cancelou a instalação do PWA.");
+      }
+      setDeferredPrompt(null);
+      setIsPwaInstallable(false);
+    }
   }
 
   return (
@@ -132,25 +171,33 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-500 rounded-lg flex-shrink-0">
-                <Target className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        {isPwaInstallable && (
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500 rounded-lg flex-shrink-0">
+                    <Download className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 text-sm sm:text-base">
+                      Instalar Aplicativo
+                    </h3>
+                    <p className="text-blue-700 dark:text-blue-300 text-xs sm:text-sm leading-relaxed">
+                      Instale o aplicativo para acesso rápido e offline.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleInstallPwa}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2 px-4 rounded-lg"
+                >
+                  Instalar
+                </Button>
               </div>
-              <div>
-                <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 text-sm sm:text-base">
-                  Dica para um melhor controle
-                </h3>
-                <p className="text-amber-700 dark:text-amber-300 text-xs sm:text-sm leading-relaxed">
-                  Defina um limite realista baseado na sua renda mensal.
-                  Lembre-se: é melhor começar com um valor menor e ajustar
-                  conforme necessário.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
