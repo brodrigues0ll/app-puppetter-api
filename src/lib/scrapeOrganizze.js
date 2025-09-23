@@ -1,5 +1,7 @@
 // src/lib/scrapeOrganizze.js
 
+"use server";
+
 export async function scrapeReport(page) {
   console.log("📊 Extraindo dados da tabela...");
 

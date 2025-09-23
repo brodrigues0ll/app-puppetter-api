@@ -1,3 +1,5 @@
+"use server";
+
 export async function login(page, email, password, reportUrl) {
   try {
     console.log("🔑 Iniciando login...");

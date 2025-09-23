@@ -1,5 +1,7 @@
 // src/lib/playwrightConfig.js
 
+"use server";
+
 import { chromium } from "playwright";
 
 export async function launchBrowser() {

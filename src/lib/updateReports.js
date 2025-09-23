@@ -1,5 +1,7 @@
 // src/lib/updateReports.js
 
+"use server";
+
 import { launchBrowser, createPage } from "@/lib/playwrightConfig";
 import { login } from "@/lib/session";
 import { scrapeReport } from "@/lib/scrapeOrganizze";
