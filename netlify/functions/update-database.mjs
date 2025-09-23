@@ -15,4 +15,6 @@ export default async () => {
 
   console.log("⏰ Executando atualização de relatórios agendada...");
   await update();
+
+  return new Response("Ok");
 };
