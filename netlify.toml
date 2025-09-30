@@ -9,4 +9,4 @@
   external_node_modules = ["playwright"]
 
 [functions."update-database"]
-  schedule = "38 18 * * *"
+  schedule = "@hourly"
