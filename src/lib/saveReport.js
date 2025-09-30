@@ -1,5 +1,5 @@
 import Report from "@/models/Report";
-import connectDB from "@/lib/mongodb"; // Certifique-se de ter o connectDB
+import connectDB from "@/lib/mongodb";
 
 export async function saveReports(data) {
   await connectDB(); // Conecta ao MongoDB
@@ -8,14 +8,10 @@ export async function saveReports(data) {
 
   for (const item of data) {
     try {
-      // Upsert: cria se não existir, atualiza se já existir
       const report = await Report.findOneAndUpdate(
-        { date: item.date },
-        // Atualiza o campo updatedAt sempre que o relatório for atualizado
-        { $set: { ...item, updatedAt: Date.now() } },
-
-        { $set: item },
-        { upsert: true, new: true }
+        { date: item.date }, // filtro
+        { $set: { ...item, updatedAt: Date.now() } }, // atualiza ou cria
+        { upsert: true, new: true } // opções: cria se não existir, retorna o documento atualizado
       );
       saved.push(report);
     } catch (err) {

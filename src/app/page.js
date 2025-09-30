@@ -25,6 +25,18 @@ export default function HomePage() {
   const [rows, setRows] = useState([]);
   const [limit, setLimit] = useState(null);
 
+  // Função para normalizar números da API
+  function parseNumber(value) {
+    if (!value) return 0;
+    return Number.parseFloat(
+      value
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace("+", "")
+        .replace("-", "")
+    );
+  }
+
   useEffect(() => {
     async function calculate() {
       const savedLimit = await getSetting("dailyLimit");
@@ -39,7 +51,7 @@ export default function HomePage() {
       const month = today.getMonth() + 1;
       const year = today.getFullYear();
 
-      let acumulado = 0; // saldo acumulado de dias anteriores
+      let acumulado = 0; // sobra/excesso acumulado
       const rowsData = [];
 
       for (let d = 1; d <= currentDay; d++) {
@@ -51,41 +63,44 @@ export default function HomePage() {
         const report = data.find((r) => r.date === dayStr);
 
         if (report) {
-          const dailySpent = Number.parseFloat(
-            report.expenses.replace("-", "").replace(",", ".")
-          );
+          const dailySpent = parseNumber(report.expenses);
+          const dailyEarnings = parseNumber(report.earnings);
           let status = "";
-          const saldoDia =
-            Number.parseFloat(savedLimit) + acumulado - dailySpent;
+
+          // ganhos extras contam como crédito
+          if (dailyEarnings > 0) {
+            acumulado += dailyEarnings;
+          }
 
           if (dailySpent < Number.parseFloat(savedLimit)) {
             const sobra = Number.parseFloat(savedLimit) - dailySpent;
-            status = `Sobra R$ ${sobra.toFixed(2)}`;
+            status += `| ✅ Sobra R$ ${sobra.toFixed(2)}`;
             acumulado += sobra;
           } else if (dailySpent > Number.parseFloat(savedLimit)) {
             const excesso = dailySpent - Number.parseFloat(savedLimit);
-            status = `⚠️ Estourou R$ ${excesso.toFixed(2)}`;
+            status += `| ⚠️ Estourou R$ ${excesso.toFixed(2)}`;
             acumulado -= excesso;
           } else {
-            status = "OK";
+            status += "| 👍 OK";
           }
 
           rowsData.push({
             date: report.date,
             spent: dailySpent.toFixed(2),
-            status,
-            saldoDia: saldoDia.toFixed(2),
+            status: status.trim(),
+            saldoDia: acumulado.toFixed(2),
           });
         } else {
           rowsData.push({
             date: dayStr,
             spent: "–",
             status: "Sem dados",
-            saldoDia: "-",
+            saldoDia: acumulado.toFixed(2),
           });
         }
       }
 
+      // o disponível de hoje é: limite do dia + acumulado de sobras/excessos anteriores
       const availableToday = Number.parseFloat(savedLimit) + acumulado;
 
       setRows(rowsData);
@@ -97,6 +112,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* Topbar */}
       <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
         <div className="px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -114,16 +130,17 @@ export default function HomePage() {
           </div>
           <Link
             href="/settings"
-            className="p-2 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <Settings className="h-5 w-5 text-gray-600 dark:text-gray-400" />
           </Link>
         </div>
       </div>
 
+      {/* Dashboard */}
       <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
+        {/* Card disponível hoje */}
         <Card className="relative overflow-hidden border-0 shadow-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-green-600">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-green-600/20 backdrop-blur-sm"></div>
           <CardContent className="relative text-center py-8 sm:py-12 px-4 sm:px-8">
             {available !== null ? (
               <>
@@ -133,19 +150,17 @@ export default function HomePage() {
                     Disponível para gastar hoje
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight break-all">
-                    R$ {available}
-                  </p>
-                  {limit && (
-                    <div className="flex items-center justify-center gap-2 text-white/70">
-                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <p className="text-sm sm:text-lg">
-                        Limite diário: R$ {limit}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                <p className="text-4xl sm:text-6xl font-black text-white tracking-tight break-all">
+                  💸 R$ {available}
+                </p>
+                {limit && (
+                  <div className="flex items-center justify-center gap-2 mt-3 text-white/70">
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <p className="text-sm sm:text-lg">
+                      Limite diário: R$ {limit}
+                    </p>
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex items-center justify-center gap-3 bg-blue-800/80 rounded-lg p-4">
@@ -158,6 +173,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
+        {/* Resumo do mês */}
         <Card className="border-0 shadow-xl bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm">
           <CardContent className="p-4 sm:p-8">
             <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
@@ -173,18 +189,18 @@ export default function HomePage() {
               <div className="min-w-[600px] sm:min-w-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                      <TableHead className="font-semibold text-gray-900 dark:text-white py-3 sm:py-4 text-sm sm:text-base">
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
                         Dia
                       </TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-white py-3 sm:py-4 text-sm sm:text-base">
+                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
                         Gasto
                       </TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-white py-3 sm:py-4 text-sm sm:text-base">
+                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
                         Status
                       </TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-white py-3 sm:py-4 text-sm sm:text-base">
-                        Saldo
+                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
+                        Acumulado
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -192,65 +208,45 @@ export default function HomePage() {
                     {rows.map((row, idx) => (
                       <TableRow
                         key={idx}
-                        className={`
-                          transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/30
-                          ${
-                            row.status.includes("Sobra")
-                              ? "bg-green-50 dark:bg-green-900/20 border-l-4 border-l-green-500"
-                              : row.status.includes("⚠️")
-                              ? "bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500"
-                              : row.status === "Sem dados"
-                              ? "bg-gray-50 dark:bg-gray-800/20 border-l-4 border-l-gray-300 dark:border-l-gray-600"
-                              : "border-l-4 border-l-blue-500"
-                          }
-                        `}
+                        className={`transition-colors ${
+                          row.status.includes("Sobra")
+                            ? "bg-green-50 dark:bg-green-900/20 border-l-4 border-l-green-500"
+                            : row.status.includes("⚠️")
+                            ? "bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500"
+                            : row.status === "Sem dados"
+                            ? "bg-gray-50 dark:bg-gray-800/20 border-l-4 border-l-gray-400"
+                            : "border-l-4 border-l-blue-500"
+                        }`}
                       >
-                        <TableCell className="font-medium py-3 sm:py-4 text-gray-900 dark:text-white text-sm sm:text-base">
+                        <TableCell className="font-medium text-gray-900 dark:text-white text-sm sm:text-base">
                           {row.date}
                         </TableCell>
-                        <TableCell className="py-3 sm:py-4">
-                          <div className="flex items-center gap-1 sm:gap-2">
-                            {row.spent !== "–" && (
-                              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500 flex-shrink-0" />
-                            )}
-                            <span className="font-medium text-gray-900 dark:text-white text-sm sm:text-base">
-                              {row.spent !== "–" ? `R$ ${row.spent}` : "–"}
-                            </span>
-                          </div>
+                        <TableCell>
+                          {row.spent !== "–" ? `R$ ${row.spent}` : "–"}
                         </TableCell>
-                        <TableCell className="py-3 sm:py-4">
-                          <div className="flex items-center gap-1 sm:gap-2">
-                            {row.status.includes("Sobra") && (
-                              <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
-                            )}
-                            {row.status.includes("⚠️") && (
-                              <TrendingDown className="h-3 w-3 sm:h-4 sm:w-4 text-red-600 flex-shrink-0" />
-                            )}
-                            <span
-                              className={`font-medium text-xs sm:text-sm ${
-                                row.status.includes("Sobra")
-                                  ? "text-green-700 dark:text-green-400"
-                                  : row.status.includes("⚠️")
-                                  ? "text-red-700 dark:text-red-400"
-                                  : "text-gray-700 dark:text-gray-300"
-                              }`}
-                            >
-                              {row.status}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3 sm:py-4">
+                        <TableCell>
                           <span
-                            className={`font-semibold text-sm sm:text-base ${
-                              Number.parseFloat(row.saldoDia) > 0
+                            className={`font-medium text-xs sm:text-sm ${
+                              row.status.includes("Sobra")
                                 ? "text-green-700 dark:text-green-400"
-                                : Number.parseFloat(row.saldoDia) < 0
+                                : row.status.includes("⚠️")
                                 ? "text-red-700 dark:text-red-400"
                                 : "text-gray-700 dark:text-gray-300"
                             }`}
                           >
-                            {row.saldoDia !== "-" ? `R$ ${row.saldoDia}` : "-"}
+                            {row.status}
                           </span>
+                        </TableCell>
+                        <TableCell
+                          className={`font-semibold text-sm sm:text-base ${
+                            Number.parseFloat(row.saldoDia) > 0
+                              ? "text-green-700 dark:text-green-400"
+                              : Number.parseFloat(row.saldoDia) < 0
+                              ? "text-red-700 dark:text-red-400"
+                              : "text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          R$ {row.saldoDia}
                         </TableCell>
                       </TableRow>
                     ))}
