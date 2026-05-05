@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -10,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getSetting, getCachedReports, setCachedReports } from "@/lib/db";
+import { getCachedReports, setCachedReports } from "@/lib/db";
 import {
   DollarSign,
   Calendar,
@@ -18,8 +20,13 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Moon,
+  LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -32,10 +39,9 @@ function getLastDay(year, month) {
   return isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
 }
 
-function computeDashboard(reports, savedLimit, year, month) {
+function computeDashboard(reports, dailyLimit, year, month) {
   const lastDay = getLastDay(year, month);
-  const limit = Number.parseFloat(savedLimit);
-
+  const limit = Number(dailyLimit);
   let acumulado = 0;
   const rows = [];
 
@@ -63,6 +69,7 @@ function computeDashboard(reports, savedLimit, year, month) {
       rows.push({
         date: dayStr,
         spent: dailySpent.toFixed(2),
+        earnings: dailyEarnings > 0 ? dailyEarnings.toFixed(2) : null,
         status: status.trim(),
         saldoDia: acumulado.toFixed(2),
       });
@@ -70,24 +77,35 @@ function computeDashboard(reports, savedLimit, year, month) {
       rows.push({
         date: dayStr,
         spent: "–",
+        earnings: null,
         status: "Sem dados",
         saldoDia: acumulado.toFixed(2),
       });
     }
   }
 
-  const available = (limit + acumulado).toFixed(2);
-  return { rows, available };
+  return {
+    rows,
+    available: (limit + acumulado).toFixed(2),
+    daysToZero: limit > 0 && acumulado < 0
+      ? Math.ceil(Math.abs(acumulado) / limit)
+      : null,
+  };
 }
 
 export default function HomePage() {
+  const { data: session } = useSession();
+  const { theme, setTheme } = useTheme();
   const now = new Date();
+
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [available, setAvailable] = useState(null);
+  const [daysToZero, setDaysToZero] = useState(null);
   const [rows, setRows] = useState([]);
-  const [limit, setLimit] = useState(null);
+  const [dailyLimit, setDailyLimit] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [noCredentials, setNoCredentials] = useState(false);
 
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
 
@@ -102,221 +120,273 @@ export default function HomePage() {
     else setMonth((m) => m + 1);
   }
 
-  useEffect(() => {
+  const loadData = useCallback(async (yr, mo) => {
     setAvailable(null);
+    setDaysToZero(null);
     setRows([]);
+    setNoCredentials(false);
 
-    async function init() {
-      const savedLimit = await getSetting("dailyLimit");
-      if (!savedLimit) return;
-      setLimit(savedLimit);
+    const settingsRes = await fetch("/api/user/settings");
+    const settings = await settingsRes.json();
+    if (!settings.dailyLimit) return;
+    const limit = settings.dailyLimit;
+    setDailyLimit(limit);
 
-      // Carrega do IndexedDB imediatamente
-      const cached = await getCachedReports(year, month);
-      if (cached.length > 0) {
-        const { rows, available } = computeDashboard(cached, savedLimit, year, month);
-        setRows(rows);
-        setAvailable(available);
-      }
-
-      // Sincroniza com a API em background
-      setSyncing(true);
-      try {
-        const res = await fetch(`/api/reports?year=${year}&month=${month}`);
-        const { data } = await res.json();
-
-        if (!data) return;
-
-        const changed = JSON.stringify(data) !== JSON.stringify(cached);
-        if (changed) {
-          await setCachedReports(year, month, data);
-          const { rows, available } = computeDashboard(data, savedLimit, year, month);
-          setRows(rows);
-          setAvailable(available);
-        }
-      } catch {
-        // falha silenciosa — mantém dados do cache
-      } finally {
-        setSyncing(false);
-      }
+    // Carrega cache imediatamente
+    const cached = await getCachedReports(yr, mo);
+    if (cached.length > 0) {
+      const dash = computeDashboard(cached, limit, yr, mo);
+      setRows(dash.rows);
+      setAvailable(dash.available);
+      setDaysToZero(dash.daysToZero);
     }
 
-    init();
-  }, [year, month]);
+    // Sincroniza em background
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/reports?year=${yr}&month=${mo}`);
+      const json = await res.json();
+
+      if (res.status === 400 && json.error?.includes("Credenciais")) {
+        setNoCredentials(true);
+        return;
+      }
+
+      if (!json.data) return;
+
+      const changed = JSON.stringify(json.data) !== JSON.stringify(cached);
+      if (changed) {
+        await setCachedReports(yr, mo, json.data);
+        const dash = computeDashboard(json.data, limit, yr, mo);
+        setRows(dash.rows);
+        setAvailable(dash.available);
+        setDaysToZero(dash.daysToZero);
+      }
+    } catch {
+      // mantém cache
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData(year, month);
+  }, [year, month, loadData]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-slate-950">
       {/* Topbar */}
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
-        <div className="px-4 py-3 sm:py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg sm:rounded-xl">
-              <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-white/10 sticky top-0 z-10">
+        <div className="px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl">
+              <DollarSign className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
-                Controle de Gastos
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white leading-none">
+                PocketFlow
               </h1>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
-                Gerencie seus gastos diários
-              </p>
+              {session?.user?.email && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 hidden sm:block">
+                  {session.user.email}
+                </p>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {syncing && <RefreshCw className="h-4 w-4 text-gray-400 animate-spin" />}
+
+          <div className="flex items-center gap-1">
+            {syncing && <RefreshCw className="h-4 w-4 text-gray-400 dark:text-gray-500 animate-spin mr-1" />}
+
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-600 dark:text-gray-300"
+              aria-label="Alternar tema"
+            >
+              {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+            </button>
+
             <Link
               href="/settings"
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-600 dark:text-gray-300"
             >
-              <Settings className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              <Settings className="h-4.5 w-4.5" />
             </Link>
+
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
+              aria-label="Sair"
+            >
+              <LogOut className="h-4.5 w-4.5" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Dashboard */}
-      <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
+      <div className="p-4 sm:p-6 space-y-5 max-w-2xl mx-auto">
+        {/* Aviso sem credenciais */}
+        {noCredentials && (
+          <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm">Credenciais não configuradas</p>
+              <p className="text-sm mt-0.5">
+                Configure seu email e token do Organizze em{" "}
+                <Link href="/settings" className="underline font-medium">Configurações</Link>.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Navegação de mês */}
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={prevMonth}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors text-gray-600 dark:text-gray-300"
           >
-            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
-          <span className="text-lg font-semibold text-gray-800 dark:text-white w-40 text-center">
+          <span className="text-base font-semibold text-gray-800 dark:text-white w-44 text-center">
             {MONTH_NAMES[month - 1]} {year}
           </span>
           <button
             onClick={nextMonth}
             disabled={isCurrentMonth}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors text-gray-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Card disponível hoje — só no mês atual */}
+        {/* Card disponível hoje */}
         {isCurrentMonth && (
-          <Card className="relative overflow-hidden border-0 shadow-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-green-600">
-            <CardContent className="relative text-center py-8 sm:py-12 px-4 sm:px-8">
+          <Card className="border-0 shadow-2xl overflow-hidden bg-gradient-to-br from-blue-600 via-blue-700 to-green-600">
+            <CardContent className="relative text-center py-8 sm:py-10 px-4">
               {available !== null ? (
                 <>
-                  <div className="flex items-center justify-center gap-2 mb-3 sm:mb-4">
-                    <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-white/80" />
-                    <p className="text-base sm:text-xl text-white/90 font-medium">
-                      Disponível para gastar hoje
-                    </p>
-                  </div>
-                  <p className="text-4xl sm:text-6xl font-black text-white tracking-tight break-all">
-                    💸 R$ {available}
+                  <p className="text-sm text-white/70 font-medium mb-2 flex items-center justify-center gap-1.5">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    Disponível para gastar hoje
                   </p>
-                  {limit && Number.parseFloat(available) < 0 && (
-                    <p className="mt-3 text-sm sm:text-base text-white/80">
+                  <p className="text-5xl sm:text-6xl font-black text-white tracking-tight">
+                    {Number(available) >= 0 ? "💸" : "🚨"} R$ {available}
+                  </p>
+
+                  {daysToZero !== null && (
+                    <p className="mt-3 text-sm text-white/80">
                       São necessários{" "}
-                      <span className="font-bold text-white">
-                        {Math.ceil(Math.abs(Number.parseFloat(available)) / Number.parseFloat(limit))} dias
-                      </span>{" "}
+                      <span className="font-bold text-white">{daysToZero} dias</span>{" "}
                       sem gastar para zerar
                     </p>
                   )}
-                  {limit && (
-                    <div className="flex items-center justify-center gap-2 mt-3 text-white/70">
-                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <p className="text-sm sm:text-lg">Limite diário: R$ {limit}</p>
+
+                  {dailyLimit && (
+                    <div className="flex items-center justify-center gap-1.5 mt-3 text-white/60">
+                      <Calendar className="h-3 w-3" />
+                      <span className="text-sm">Limite diário: R$ {Number(dailyLimit).toFixed(2)}</span>
                     </div>
                   )}
                 </>
               ) : (
-                <div className="flex items-center justify-center gap-3 bg-blue-800/80 rounded-lg p-4">
-                  <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-white"></div>
-                  <p className="text-white font-medium text-base sm:text-lg">Carregando...</p>
+                <div className="flex items-center justify-center gap-3 py-4">
+                  <div className="h-7 w-7 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <p className="text-white font-medium">Carregando...</p>
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Resumo do mês */}
-        <Card className="border-0 shadow-xl bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm">
-          <CardContent className="p-4 sm:p-8">
-            <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-              <div className="p-1.5 sm:p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
-                <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        {/* Tabela resumo */}
+        <Card className="border border-gray-200 dark:border-white/10 shadow-xl bg-white dark:bg-gray-900">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
+                <Calendar className="h-4 w-4 text-white" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-                Resumo do mês
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                Resumo — {MONTH_NAMES[month - 1]} {year}
               </h2>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 -mx-2 sm:mx-0">
-              <div className="min-w-[600px] sm:min-w-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">Dia</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">Gasto</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">Status</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">Acumulado</TableHead>
+            <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-white/10">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/5">
+                    <TableHead className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Dia</TableHead>
+                    <TableHead className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Gasto</TableHead>
+                    <TableHead className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Status</TableHead>
+                    <TableHead className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Acumulado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-gray-400 dark:text-gray-500 py-10">
+                        {syncing ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Buscando dados...
+                          </div>
+                        ) : "Nenhum dado encontrado"}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-gray-400 py-8">
-                          {syncing ? "Buscando dados..." : "Nenhum dado encontrado"}
+                  ) : (
+                    rows.map((row, idx) => (
+                      <TableRow
+                        key={idx}
+                        className={`border-l-4 transition-colors ${
+                          row.status.includes("Sobra")
+                            ? "border-l-green-500 bg-green-50/60 dark:bg-green-900/10 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            : row.status.includes("⚠️")
+                            ? "border-l-red-500 bg-red-50/60 dark:bg-red-900/10 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            : row.status === "Sem dados"
+                            ? "border-l-gray-300 dark:border-l-gray-700 bg-gray-50/60 dark:bg-white/[0.02]"
+                            : "border-l-blue-500 dark:border-l-blue-700"
+                        }`}
+                      >
+                        <TableCell className="font-medium text-gray-900 dark:text-gray-100 text-sm py-2.5">
+                          {row.date}
+                        </TableCell>
+                        <TableCell className="text-sm py-2.5">
+                          {row.spent !== "–" ? (
+                            <span className="text-gray-900 dark:text-gray-100">
+                              R$ {row.spent}
+                              {row.earnings && (
+                                <span className="ml-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                                  +{row.earnings}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-600">–</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm py-2.5">
+                          <span className={`font-medium ${
+                            row.status.includes("Sobra")
+                              ? "text-green-700 dark:text-green-400"
+                              : row.status.includes("⚠️")
+                              ? "text-red-700 dark:text-red-400"
+                              : "text-gray-500 dark:text-gray-500"
+                          }`}>
+                            {row.status}
+                          </span>
+                        </TableCell>
+                        <TableCell className={`font-semibold text-sm py-2.5 ${
+                          Number(row.saldoDia) > 0
+                            ? "text-green-700 dark:text-green-400"
+                            : Number(row.saldoDia) < 0
+                            ? "text-red-700 dark:text-red-400"
+                            : "text-gray-500 dark:text-gray-400"
+                        }`}>
+                          R$ {row.saldoDia}
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      rows.map((row, idx) => (
-                        <TableRow
-                          key={idx}
-                          className={`transition-colors ${
-                            row.status.includes("Sobra")
-                              ? "bg-green-50 dark:bg-green-900/20 border-l-4 border-l-green-500"
-                              : row.status.includes("⚠️")
-                              ? "bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500"
-                              : row.status === "Sem dados"
-                              ? "bg-gray-50 dark:bg-gray-800/20 border-l-4 border-l-gray-400"
-                              : "border-l-4 border-l-blue-500"
-                          }`}
-                        >
-                          <TableCell className="font-medium text-gray-900 dark:text-white text-sm sm:text-base">
-                            {row.date}
-                          </TableCell>
-                          <TableCell>
-                            {row.spent !== "–" ? `R$ ${row.spent}` : "–"}
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className={`font-medium text-xs sm:text-sm ${
-                                row.status.includes("Sobra")
-                                  ? "text-green-700 dark:text-green-400"
-                                  : row.status.includes("⚠️")
-                                  ? "text-red-700 dark:text-red-400"
-                                  : "text-gray-700 dark:text-gray-300"
-                              }`}
-                            >
-                              {row.status}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            className={`font-semibold text-sm sm:text-base ${
-                              Number.parseFloat(row.saldoDia) > 0
-                                ? "text-green-700 dark:text-green-400"
-                                : Number.parseFloat(row.saldoDia) < 0
-                                ? "text-red-700 dark:text-red-400"
-                                : "text-gray-700 dark:text-gray-300"
-                            }`}
-                          >
-                            R$ {row.saldoDia}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>

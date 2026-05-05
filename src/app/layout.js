@@ -1,6 +1,8 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import RegisterSW from "@/lib/RegisterSW"; // Componente client-side para registrar o SW
+import RegisterSW from "@/lib/RegisterSW";
+import SessionProvider from "@/providers/SessionProvider";
+import ThemeProvider from "@/providers/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,9 +21,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        {/* Manifest PWA */}
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/icon-192.png" />
         <meta name="theme-color" content="#0074a6" />
@@ -33,12 +34,13 @@ export default function RootLayout({ children }) {
           content="6wIovKF9M4CCO3WdIAvF7WLIn6z5i-cZrWuduCLKi9Q"
         />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {/* Componente client-side apenas para registrar SW */}
-        <RegisterSW />
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ThemeProvider>
+          <SessionProvider>
+            <RegisterSW />
+            {children}
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
