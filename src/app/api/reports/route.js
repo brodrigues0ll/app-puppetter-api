@@ -22,6 +22,8 @@ export async function GET(req) {
 
     const dailyMap = {};
     for (const tx of transactions) {
+      if (tx.oposite_transaction_id != null) continue; // ignora transferências entre contas
+
       const txDate = tx.date;
       const cents = tx.amount_cents || 0;
 
