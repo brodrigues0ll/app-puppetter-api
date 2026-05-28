@@ -41,7 +41,8 @@ export async function GET(req) {
 
     const dailyMap = {};
     for (const tx of transactions) {
-      if (tx.oposite_transaction_id != null) continue;
+      if (tx.oposite_transaction_id != null) continue; // transferência entre contas
+      if (tx.paid_credit_card_id != null) continue;   // pagamento de fatura do cartão
       const txDate = tx.date;
       const cents = tx.amount_cents || 0;
       if (!dailyMap[txDate]) dailyMap[txDate] = { earnings: 0, expenses: 0 };

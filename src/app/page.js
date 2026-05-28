@@ -74,21 +74,23 @@ function computeDashboard(reports, dailyLimit, year, month) {
         saldoDia: acumulado.toFixed(2),
       });
     } else {
+      acumulado += limit; // dia sem dados = não gastou nada, sobra o limite todo
       rows.push({
         date: dayStr,
         spent: "–",
         earnings: null,
-        status: "Sem dados",
+        status: "| ✅ Sem gastos",
         saldoDia: acumulado.toFixed(2),
       });
     }
   }
 
+  const available = (limit + acumulado).toFixed(2);
   return {
     rows,
-    available: (limit + acumulado).toFixed(2),
-    daysToZero: limit > 0 && acumulado < 0
-      ? Math.ceil(Math.abs(acumulado) / limit)
+    available,
+    daysToZero: limit > 0 && Number(available) < 0
+      ? Math.ceil(Math.abs(Number(available)) / limit)
       : null,
   };
 }
