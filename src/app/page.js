@@ -42,55 +42,55 @@ function getLastDay(year, month) {
 function computeDashboard(reports, dailyLimit, year, month) {
   const lastDay = getLastDay(year, month);
   const limit = Number(dailyLimit);
-  let acumulado = 0;
+  let balance = 0; // saldo corrente: soma de (limite - gasto + receita) de cada dia
   const rows = [];
 
   for (let d = 1; d <= lastDay; d++) {
     const dayStr = `${String(d).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
     const report = reports.find((r) => r.date === dayStr);
 
+    balance += limit; // cada dia começa creditando o limite do dia
+
     if (report) {
-      const dailySpent = report.expenses ?? 0;
-      const dailyEarnings = report.earnings ?? 0;
+      const spent = report.expenses ?? 0;
+      const earnings = report.earnings ?? 0;
+
+      balance -= spent;
+      balance += earnings;
+
       let status = "";
-
-      if (dailyEarnings > 0) acumulado += dailyEarnings;
-
-      if (dailySpent < limit) {
-        acumulado += limit - dailySpent;
-        status = `| ✅ Sobra R$ ${(limit - dailySpent).toFixed(2)}`;
-      } else if (dailySpent > limit) {
-        acumulado -= dailySpent - limit;
-        status = `| ⚠️ Estourou R$ ${(dailySpent - limit).toFixed(2)}`;
+      if (spent < limit) {
+        status = `| ✅ Sobra R$ ${(limit - spent).toFixed(2)}`;
+      } else if (spent > limit) {
+        status = `| ⚠️ Estourou R$ ${(spent - limit).toFixed(2)}`;
       } else {
         status = "| 👍 OK";
       }
 
       rows.push({
         date: dayStr,
-        spent: dailySpent.toFixed(2),
-        earnings: dailyEarnings > 0 ? dailyEarnings.toFixed(2) : null,
+        spent: spent.toFixed(2),
+        earnings: earnings > 0 ? earnings.toFixed(2) : null,
         status: status.trim(),
-        saldoDia: acumulado.toFixed(2),
+        saldoDia: balance.toFixed(2),
       });
     } else {
-      acumulado += limit; // dia sem dados = não gastou nada, sobra o limite todo
+      // sem dados = não gastou nada, limite do dia fica no saldo
       rows.push({
         date: dayStr,
         spent: "–",
         earnings: null,
         status: "| ✅ Sem gastos",
-        saldoDia: acumulado.toFixed(2),
+        saldoDia: balance.toFixed(2),
       });
     }
   }
 
-  const available = (limit + acumulado).toFixed(2);
   return {
     rows,
-    available,
-    daysToZero: limit > 0 && Number(available) < 0
-      ? Math.ceil(Math.abs(Number(available)) / limit)
+    available: balance.toFixed(2),
+    daysToZero: limit > 0 && balance < 0
+      ? Math.ceil(Math.abs(balance) / limit)
       : null,
   };
 }
